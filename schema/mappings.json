@@ -30,6 +30,9 @@
     "mime": {
       "type": "keyword"
     },
+    "users": {
+      "type": "integer"
+    },
     "thumbnail": {
       "type": "keyword",
       "index": false

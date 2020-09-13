@@ -13,6 +13,7 @@ typedef struct {
     int mtime;
     short base;
     short ext;
+    uid_t users[64];
 } line_t;
 
 void skip_meta(FILE *file) {
@@ -274,6 +275,17 @@ void read_index_bin(const char *path, const char *index_id, index_func func) {
             cJSON_AddStringToObject(document, "path", tmp);
         } else {
             cJSON_AddStringToObject(document, "path", "");
+        }
+
+        cJSON *users_arr = cJSON_AddArrayToObject(document, "users");
+        for (int i = 0; i < sizeof(line.users) / sizeof(uid_t); i++) {
+            uid_t uid = line.users[i];
+
+            if (uid == 0) {
+                break;
+            }
+
+            cJSON_AddItemToArray(users_arr, cJSON_CreateNumber(uid));
         }
 
         enum metakey key = getc(file);

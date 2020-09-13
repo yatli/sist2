@@ -561,12 +561,11 @@ function search(after = null) {
                 filter: filters
             }
         },
-        "sort": SORT_MODES[CONF.options.sort].mode,
-        aggs:
-            {
-                total_size: {"sum": {"field": "size"}},
-                total_count: {"value_count": {"field": "size"}}
-            },
+        sort: SORT_MODES[CONF.options.sort].mode,
+        aggs: {
+            total_size: {"sum": {"field": "size"}},
+            total_count: {"value_count": {"field": "size"}}
+        },
         size: SIZE,
     };
 

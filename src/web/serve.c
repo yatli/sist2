@@ -236,10 +236,12 @@ void search(struct mg_connection *nc, struct http_message *hm) {
     memcpy(body, hm->body.p, hm->body.len);
     *(body + hm->body.len) = '\0';
 
-    char url[4096];
-    snprintf(url, 4096, "%s/%s/_search", WebCtx.es_url, WebCtx.es_index);
+    char* query = sanitize_and_transform_query(body);
 
-    nc->user_data = web_post_async(url, body);
+    char url[4096];
+    snprintf(url, sizeof(url), "%s/%s/_search", WebCtx.es_url, WebCtx.es_index);
+
+    nc->user_data = web_post_async(url, query);
     free(body);
 }
 

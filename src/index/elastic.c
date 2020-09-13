@@ -453,3 +453,47 @@ char *elastic_get_status() {
     cJSON_Delete(json);
     return status;
 }
+
+char *sanitize_and_transform_query(char* body) {
+
+    cJSON *raw_query = cJSON_Parse(body);
+    free(body);
+
+    if (raw_query == NULL) {
+        return NULL;
+    }
+
+    char* query_str = cJSON_PrintUnformatted(raw_query);
+    LOG_DEBUGF("elastic.c", "Query\n%s", query_str)
+
+    cJSON *dsl_query = cJSON_GetObjectItem(raw_query, "query");
+    if (dsl_query == NULL || dsl_query->type != cJSON_Object) {
+
+        cJSON *dsl_size = cJSON_GetObjectItem(raw_query, "size");
+        cJSON_Delete(raw_query);
+        if (dsl_size == NULL || dsl_size->type != cJSON_Number || dsl_size != 0) {
+            LOG_ERROR("elastic.c", "Invalid query: query without 'query' clause must have size=0")
+            return NULL;
+        }
+
+        return query_str;
+    }
+
+    cJSON *dsl_bool = cJSON_GetObjectItem(dsl_query, "bool");
+    if (dsl_bool == NULL || dsl_bool->type != cJSON_Object) {
+        cJSON_Delete(raw_query);
+        LOG_ERROR("elastic.c", "Invalid query: 'query' clause must have 'bool' child")
+        return NULL;
+    }
+
+    cJSON *dsl_filter = cJSON_GetObjectItem(dsl_bool, "filter");
+    if (dsl_filter == NULL || dsl_filter->type != cJSON_Array) {
+        cJSON_Delete(raw_query);
+        LOG_ERROR("elastic.c", "Invalid query: 'bool' clause must have 'filter' child")
+        return NULL;
+    }
+
+    cJSON_Delete(raw_query);
+
+    return query_str;
+}

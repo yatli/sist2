@@ -4,6 +4,8 @@
 #include "src/ctx.h"
 #include "mime.h"
 #include "src/io/serialize.h"
+#include <grp.h>
+#include <pwd.h>
 
 #include <magic.h>
 
@@ -38,6 +40,61 @@ void fs_reset(struct vfile *f) {
     }
 }
 
+GHashTable *GroupsCache = NULL;
+pthread_mutex_t PasswdLock;
+int PasswdLockInitialized = FALSE;
+
+static void get_users(document_t *doc, struct stat info) {
+    if (GroupsCache == NULL) {
+        GroupsCache = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, free);
+        if (PasswdLockInitialized == FALSE) {
+            pthread_mutex_init(&PasswdLock, NULL);
+            PasswdLockInitialized = TRUE;
+        }
+    }
+
+    doc->users[0] = info.st_uid;
+
+    uid_t *users = g_hash_table_lookup(GroupsCache, GINT_TO_POINTER(info.st_gid));
+    if (users == NULL) {
+        users = calloc((USER_UID_COUNT - 1), sizeof(uid_t));
+        g_hash_table_insert(GroupsCache, GINT_TO_POINTER(info.st_gid), users);
+
+        struct group *grp = getgrgid(info.st_gid);
+
+        int i = 0;
+
+        // Secondary group
+        char **member = grp->gr_mem;
+        while(*member && i < USER_UID_COUNT) {
+            struct passwd *usr = getpwnam(*member++);
+            if (usr != NULL && usr->pw_uid != info.st_uid && usr->pw_uid != 0) {
+                if (i >= USER_UID_COUNT) {
+                    break;
+                }
+
+                users[i++] = usr->pw_uid;
+            }
+        }
+
+        // Primary group
+        pthread_mutex_lock(&PasswdLock);
+        setpwent();
+        struct passwd *pwd = getpwent();
+        while(pwd != NULL && i < USER_UID_COUNT) {
+            if(pwd->pw_gid == info.st_gid && pwd->pw_uid != info.st_uid && pwd->pw_uid != 0) {
+                users[i++] = pwd->pw_uid;
+            }
+
+            pwd = getpwent();
+        }
+        pthread_mutex_unlock(&PasswdLock);
+    }
+
+    memcpy(&doc->users[1], users, sizeof(uid_t) * (USER_UID_COUNT - 1));
+}
+
+
 #define IS_GIT_OBJ (strlen(doc.filepath + doc.base) == 38 && (strstr(doc.filepath, "objects") != NULL))
 
 void parse(void *arg) {
@@ -60,6 +117,7 @@ void parse(void *arg) {
     doc.size = job->vfile.info.st_size;
     doc.ino = job->vfile.info.st_ino;
     doc.mtime = job->vfile.info.st_mtim.tv_sec;
+    get_users(&doc, job->vfile.info);
 
     uuid_generate(doc.uuid);
     char *buf[MAGIC_BUF_SIZE];

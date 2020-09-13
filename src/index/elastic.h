@@ -33,4 +33,6 @@ char *elastic_get_status();
 
 void execute_update_script(const char *script, int async, const char index_id[UUID_STR_LEN]);
 
+char *sanitize_and_transform_query(char* body);
+
 #endif
